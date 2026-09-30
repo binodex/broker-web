@@ -1,6 +1,7 @@
 import { brokerFetch, jsonError } from "@/lib/broker";
-import { requestPublicOrigin } from "@/lib/request-origin";
+import { requestClientIp, requestPublicOrigin } from "@/lib/request-origin";
 import { getAccessToken } from "@/lib/session";
+import type { WidgetSession } from "@/lib/types";
 
 export async function POST(request: Request) {
   try {
@@ -14,14 +15,16 @@ export async function POST(request: Request) {
     const body = await request.json();
     const mode = body?.mode === "withdraw" ? "withdraw" : "deposit";
     const origin = requestPublicOrigin(request);
-    const data = await brokerFetch<{ session: string; expires_in: number }>(
-      "/broker/widget-sessions",
-      {
-        method: "POST",
-        token,
-        body: JSON.stringify({ origin, mode }),
-      },
-    );
+    const userIp = requestClientIp(request);
+    const data = await brokerFetch<WidgetSession>("/broker/widget-sessions", {
+      method: "POST",
+      token,
+      body: JSON.stringify({
+        origin,
+        mode,
+        ...(userIp ? { user_ip: userIp } : {}),
+      }),
+    });
     return Response.json(data);
   } catch (error) {
     return jsonError(error);

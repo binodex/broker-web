@@ -108,3 +108,11 @@ export interface SessionPayload {
 export interface BrokerErrorBody {
   error?: { message?: string; details?: unknown };
 }
+
+export interface WidgetSession {
+  session: string;
+  expires_in: number;
+  widget_url?: string;
+  widget_origin?: string;
+  region?: "ru" | "global";
+}

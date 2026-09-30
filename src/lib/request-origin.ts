@@ -1,3 +1,5 @@
+import { isIP } from "node:net";
+
 const TUNNEL_HOST = /^[a-z0-9-]+\.trycloudflare\.com$/i;
 
 function firstHeader(request: Request, name: string) {
@@ -20,4 +22,12 @@ export function requestPublicOrigin(request: Request): string {
 
 export function requestRedirectUri(request: Request): string {
   return `${requestPublicOrigin(request)}/auth/callback`;
+}
+
+export function requestClientIp(request: Request): string | null {
+  const candidate =
+    firstHeader(request, "cf-connecting-ip") ||
+    firstHeader(request, "x-real-ip") ||
+    firstHeader(request, "x-forwarded-for");
+  return candidate && isIP(candidate) ? candidate : null;
 }

@@ -2,54 +2,95 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useSession } from "@/components/session-provider";
+import type { WidgetSession } from "@/lib/types";
 
 interface PayEmbedProps {
   mode: "deposit" | "withdraw";
   onCredited?: () => void;
 }
 
+interface Frame {
+  src: string;
+  origin: string;
+}
+
+// The session lives 60 s; leave headroom for the iframe's own redeem call.
+const SESSION_REUSE_MS = 45_000;
+
 export function PayEmbed({ mode, onCredited }: PayEmbedProps) {
   const { session } = useSession();
   const iframeRef = useRef<HTMLIFrameElement>(null);
+  const pendingRef = useRef<{ id: string; mintedAt: number } | null>(null);
   const [height, setHeight] = useState(720);
   const [status, setStatus] = useState("Opening widget…");
-  const embedUrl = session?.platform_url ?? "";
+  const [frame, setFrame] = useState<Frame | null>(null);
+  const platformUrl = session?.platform_url ?? "";
   const clientId = session?.client_id ?? "";
-  const embedOrigin = originOf(embedUrl);
 
-  const mintAndInit = useCallback(async () => {
-    const iframe = iframeRef.current;
-    if (!iframe?.contentWindow || !embedOrigin) return;
-    setStatus("Creating session…");
-    const res = await fetch("/api/widget-session", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ mode }),
-    });
-    const data = await res.json();
-    if (!res.ok || typeof data.session !== "string") {
-      setStatus(data?.error?.message ?? "Could not create widget session");
-      return;
+  const mint = useCallback(async (): Promise<WidgetSession | null> => {
+    try {
+      const res = await fetch("/api/widget-session", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ mode }),
+      });
+      const data = await res.json();
+      if (!res.ok || typeof data?.session !== "string") {
+        setStatus(data?.error?.message ?? "Could not create widget session");
+        return null;
+      }
+      return data as WidgetSession;
+    } catch {
+      setStatus("Could not create widget session");
+      return null;
     }
-    iframe.contentWindow.postMessage(
-      { type: "binodex-embed:init", session: data.session },
-      embedOrigin,
-    );
-    setStatus("");
-  }, [mode, embedOrigin]);
+  }, [mode]);
 
   useEffect(() => {
+    if (!clientId) return;
+    let cancelled = false;
+    void mint().then((data) => {
+      if (cancelled || !data) return;
+      const src =
+        data.widget_url ??
+        `${platformUrl}/embed/pay?mode=${mode}&client_id=${encodeURIComponent(clientId)}`;
+      pendingRef.current = { id: data.session, mintedAt: Date.now() };
+      setFrame({ src, origin: data.widget_origin ?? originOf(src) });
+      setStatus("");
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [mint, mode, platformUrl, clientId]);
+
+  const sendInit = useCallback(
+    async (reuse: boolean) => {
+      const target = iframeRef.current?.contentWindow;
+      if (!target || !frame) return;
+      const pending = pendingRef.current;
+      pendingRef.current = null;
+      const fresh =
+        reuse && pending && Date.now() - pending.mintedAt < SESSION_REUSE_MS
+          ? pending.id
+          : ((await mint())?.session ?? null);
+      if (!fresh) return;
+      target.postMessage(
+        { type: "binodex-embed:init", session: fresh },
+        frame.origin,
+      );
+    },
+    [frame, mint],
+  );
+
+  useEffect(() => {
+    if (!frame) return;
     const onMessage = (event: MessageEvent) => {
       const iframe = iframeRef.current;
       if (!iframe || event.source !== iframe.contentWindow) return;
-      if (embedOrigin && event.origin !== embedOrigin) return;
+      if (event.origin !== frame.origin) return;
       const type = (event.data as { type?: string } | null)?.type;
-      if (
-        type === "binodex-embed:ready" ||
-        type === "binodex-embed:reauth-required"
-      ) {
-        void mintAndInit();
-      }
+      if (type === "binodex-embed:ready") void sendInit(true);
+      if (type === "binodex-embed:reauth-required") void sendInit(false);
       if (type === "binodex-embed:close") {
         window.dispatchEvent(new Event("broker-embed-close"));
       }
@@ -61,36 +102,41 @@ export function PayEmbed({ mode, onCredited }: PayEmbedProps) {
         typeof (event.data as { height?: number }).height === "number"
       ) {
         setHeight(
-          Math.max(520, Math.min(900, (event.data as { height: number }).height)),
+          Math.max(
+            520,
+            Math.min(900, (event.data as { height: number }).height),
+          ),
         );
       }
       if (type === "binodex-embed:error") {
         setStatus(
-          String((event.data as { message?: string }).message ?? "Widget error"),
+          String(
+            (event.data as { message?: string }).message ?? "Widget error",
+          ),
         );
       }
     };
     window.addEventListener("message", onMessage);
     return () => window.removeEventListener("message", onMessage);
-  }, [mintAndInit, onCredited, embedOrigin]);
-
-  const src = `${embedUrl}/embed/pay?mode=${mode}&client_id=${encodeURIComponent(clientId)}`;
+  }, [frame, sendInit, onCredited]);
 
   return (
-    <div className="relative">
+    <div className="relative" style={{ minHeight: height }}>
       {status ? (
         <p className="text-muted-foreground absolute inset-x-0 top-5 z-10 text-center text-sm">
           {status}
         </p>
       ) : null}
-      <iframe
-        ref={iframeRef}
-        title={mode === "deposit" ? "Deposit" : "Withdraw"}
-        src={src}
-        allow="payment *; clipboard-write *"
-        className="w-full border-0 bg-transparent"
-        style={{ height }}
-      />
+      {frame ? (
+        <iframe
+          ref={iframeRef}
+          title={mode === "deposit" ? "Deposit" : "Withdraw"}
+          src={frame.src}
+          allow="payment *; clipboard-write *"
+          className="w-full border-0 bg-transparent"
+          style={{ height }}
+        />
+      ) : null}
     </div>
   );
 }
