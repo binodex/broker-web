@@ -14,7 +14,7 @@ export function requestPublicOrigin(request: Request): string {
   const forwardedProto = firstHeader(request, "x-forwarded-proto");
   const proto =
     forwardedProto ||
-    (TUNNEL_HOST.test(hostName) || hostName.endsWith(".lh")
+    (TUNNEL_HOST.test(hostName)
       ? "https"
       : new URL(request.url).protocol.replace(":", ""));
   return `${proto}://${host}`.replace(/\/$/, "");

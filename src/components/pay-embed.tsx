@@ -14,7 +14,6 @@ interface Frame {
   origin: string;
 }
 
-// The session lives 60 s; leave headroom for the iframe's own redeem call.
 const SESSION_REUSE_MS = 45_000;
 
 export function PayEmbed({ mode, onCredited }: PayEmbedProps) {
