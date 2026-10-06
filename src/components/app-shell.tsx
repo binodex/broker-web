@@ -10,6 +10,7 @@ import {
   LogOut,
 } from "lucide-react";
 import { BrandMark } from "@/components/brand-mark";
+import { DemoRefill } from "@/components/demo-refill";
 import { HistoryTable } from "@/components/history-table";
 import { PayModal } from "@/components/pay-modal";
 import { TradeRoom } from "@/components/trade-room";
@@ -154,6 +155,7 @@ export function AppShell() {
               USD
             </span>
           </span>
+          <DemoRefill />
           <Button
             size="icon-xs"
             className="size-8 rounded-[4px] md:hidden"

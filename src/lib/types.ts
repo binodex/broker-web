@@ -13,6 +13,11 @@ export interface BrokerBalance {
   total: number;
 }
 
+export interface BrokerDemoTopup {
+  credited: number;
+  demo: BrokerBalance;
+}
+
 export interface BrokerUser {
   id: number;
   level: BrokerLevel;
