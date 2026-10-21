@@ -52,6 +52,7 @@ interface PayWidgetBaseOptions {
   lang?: string;
   theme?: PayTheme;
   requireChannel?: boolean;
+  allowedWidgetOrigins?: readonly string[];
 }
 
 export type PayWidgetOptions = PayWidgetBaseOptions &

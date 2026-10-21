@@ -300,6 +300,45 @@ describe("<Root> with its parts", () => {
     });
   });
 
+  it("refuses a widget outside allowedWidgetOrigins and opens one inside it", async () => {
+    const onError = vi.fn();
+
+    await render(
+      <Pay.Root
+        mode="deposit"
+        createSession={sessionSpy()}
+        allowedWidgetOrigins={["https://pay.other.example"]}
+        onError={onError}
+      >
+        <Pay.Status />
+        <Pay.Frame />
+      </Pay.Root>,
+    );
+    await flush();
+
+    expect(iframeIn(host)).toBeNull();
+    expect(onError).toHaveBeenCalledWith({
+      code: "invalid_widget_url",
+      message: "The widget session has no usable widget URL",
+    });
+
+    await render(
+      <Pay.Root
+        key="allowed"
+        mode="deposit"
+        createSession={sessionSpy()}
+        allowedWidgetOrigins={["https://pay.example"]}
+      >
+        <Pay.Frame />
+      </Pay.Root>,
+    );
+    await flush();
+
+    expect(iframeIn(host)?.getAttribute("src")).toMatch(
+      /^https:\/\/pay\.example\//,
+    );
+  });
+
   it("restarts with a new session when the mode changes", async () => {
     const createSession = sessionSpy();
     const view = (mode: "deposit" | "withdraw") => (

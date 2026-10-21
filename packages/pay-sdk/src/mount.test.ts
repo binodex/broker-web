@@ -121,6 +121,30 @@ describe("mount", () => {
     expect(part(root, "status")?.textContent).toBe("Sign in again");
   });
 
+  it("passes allowedWidgetOrigins to the frame and reports a refused widget", async () => {
+    const onError = vi.fn();
+    const root = markup(["status", "frame"]);
+
+    keep(
+      mount(root, {
+        mode: "deposit",
+        createSession: vi.fn<CreateSession>(async () => widgetSession()),
+        allowedWidgetOrigins: ["https://pay.other.example"],
+        onError,
+      }),
+    );
+    await settle();
+
+    expect(iframeIn(root)).toBeNull();
+    expect(onError).toHaveBeenCalledWith({
+      code: "invalid_widget_url",
+      message: "The widget session has no usable widget URL",
+    });
+    expect(part(root, "status")?.textContent).toBe(
+      "The widget session has no usable widget URL",
+    );
+  });
+
   it("closes when the widget asks and stays inert after destroy", async () => {
     const onOpenChange = vi.fn();
     const createSession = vi.fn<CreateSession>(async () => widgetSession());

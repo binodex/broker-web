@@ -16,7 +16,7 @@ import type {
 import { resolveWidgetLocation } from "./widget-url.js";
 
 const DEFAULT_HEIGHTS = { initial: 720, min: 520, max: 900 } as const;
-const FRAME_PERMISSIONS = "payment *; clipboard-write *";
+const FRAME_FEATURES = ["payment", "clipboard-write"] as const;
 
 export interface FrameEvents {
   status: (status: PayStatus, error: PayError | null) => void;
@@ -57,12 +57,16 @@ export const heightBounds = (options: FrameOptions): HeightBounds => {
 
 const createFrame = (
   src: string,
+  origin: string,
   title: string,
   height: number,
 ): HTMLIFrameElement => {
   const frame = document.createElement("iframe");
   frame.setAttribute("title", title);
-  frame.setAttribute("allow", FRAME_PERMISSIONS);
+  frame.setAttribute(
+    "allow",
+    FRAME_FEATURES.map((feature) => `${feature} ${origin}`).join("; "),
+  );
   frame.setAttribute("referrerpolicy", "origin");
   frame.style.display = "block";
   frame.style.width = "100%";
@@ -196,6 +200,7 @@ export const runPayFrame = (
         platformUrl: options.platformUrl,
         lang: options.lang,
         theme: options.theme,
+        allowedOrigins: options.allowedWidgetOrigins,
       });
       if (!location) {
         throw new PaySdkError(
@@ -207,6 +212,7 @@ export const runPayFrame = (
       widgetOrigin = location.origin;
       frame = createFrame(
         location.src,
+        location.origin,
         options.title || (options.mode === "withdraw" ? "Withdraw" : "Deposit"),
         bounds.initial,
       );

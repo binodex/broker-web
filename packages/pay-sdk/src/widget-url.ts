@@ -16,6 +16,7 @@ export interface WidgetLocationInput {
   platformUrl?: string;
   lang?: string;
   theme?: PayTheme;
+  allowedOrigins?: readonly string[];
 }
 
 const fallbackUrl = ({
@@ -34,6 +35,16 @@ const isTransportAllowed = (url: URL): boolean =>
   url.protocol === "https:" ||
   (url.protocol === "http:" && LOOPBACK_HOST.test(url.hostname));
 
+const normalizeOrigins = (entries: readonly string[]): string[] =>
+  entries.flatMap((entry) => {
+    try {
+      const url = new URL(entry);
+      return isTransportAllowed(url) ? [url.origin] : [];
+    } catch {
+      return [];
+    }
+  });
+
 export const resolveWidgetLocation = (
   input: WidgetLocationInput,
 ): WidgetLocation | null => {
@@ -44,6 +55,12 @@ export const resolveWidgetLocation = (
     if (!isTransportAllowed(url) || url.username || url.password) return null;
     const declaredOrigin = input.session.widget_origin;
     if (declaredOrigin && declaredOrigin !== url.origin) return null;
+    if (
+      input.allowedOrigins &&
+      !normalizeOrigins(input.allowedOrigins).includes(url.origin)
+    ) {
+      return null;
+    }
     if (input.lang && LANG_PATTERN.test(input.lang)) {
       url.searchParams.set("lang", input.lang);
     }

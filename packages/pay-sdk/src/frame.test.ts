@@ -18,6 +18,7 @@ type Overrides = FrameOptions & {
   createSession?: CreateSession;
   sessionEndpoint?: string;
   requireChannel?: boolean;
+  allowedWidgetOrigins?: readonly string[];
   clientId?: string;
   platformUrl?: string;
   lang?: string;
@@ -75,7 +76,7 @@ describe("opening the widget", () => {
     expect(first.channel).toMatch(/^[A-Za-z0-9_-]{22}$/);
     expect(second.channel).not.toBe(first.channel);
     expect(first.frame.getAttribute("allow")).toBe(
-      "payment *; clipboard-write *",
+      `payment ${WIDGET_ORIGIN}; clipboard-write ${WIDGET_ORIGIN}`,
     );
     expect(first.frame.getAttribute("referrerpolicy")).toBe("origin");
     expect(first.frame.getAttribute("title")).toBe("Deposit");
@@ -137,6 +138,104 @@ describe("opening the widget", () => {
     expect(run.events.status).toHaveBeenLastCalledWith("error", {
       code: "invalid_widget_url",
       message: "The widget session has no usable widget URL",
+    });
+  });
+
+  it("scopes the iframe permissions to the widget origin of the session", async () => {
+    const { frame } = await opened({
+      createSession: vi.fn(async () =>
+        widgetSession({
+          widget_url: "https://pay.eu.example/embed/pay?mode=deposit",
+          widget_origin: "https://pay.eu.example",
+        }),
+      ),
+    });
+
+    expect(frame.getAttribute("allow")).toBe(
+      "payment https://pay.eu.example; clipboard-write https://pay.eu.example",
+    );
+    expect(frame.getAttribute("allow")).not.toContain("*");
+  });
+
+  describe("allowedWidgetOrigins", () => {
+    it("opens a widget whose origin is listed, whatever the entry's path or slash", async () => {
+      const { frame } = await opened({
+        allowedWidgetOrigins: [
+          "https://other.example",
+          `${WIDGET_ORIGIN}/some/path/`,
+        ],
+      });
+
+      expect(frame.getAttribute("src")).toMatch(/^https:\/\/pay\.example\//);
+    });
+
+    it.each<[string, readonly string[], Partial<WidgetSession>]>([
+      ["a different origin", ["https://pay.other.example"], {}],
+      [
+        "a lookalike host",
+        [WIDGET_ORIGIN],
+        {
+          widget_url: "https://pay.example.evil.test/embed/pay",
+          widget_origin: undefined,
+        },
+      ],
+      [
+        "a different port",
+        [WIDGET_ORIGIN],
+        {
+          widget_url: "https://pay.example:8443/embed/pay",
+          widget_origin: undefined,
+        },
+      ],
+      ["an empty list", [], {}],
+      ["entries that are not origins", ["pay.example", "not a url", ""], {}],
+      ["a plain http entry for a remote host", ["http://pay.example"], {}],
+    ])(
+      "refuses a widget outside the list: %s",
+      async (_case, allowed, session) => {
+        const createSession = vi.fn<CreateSession>(async () =>
+          widgetSession(session),
+        );
+        const run = start({ allowedWidgetOrigins: allowed, createSession });
+        await settle();
+
+        expect(iframeIn(run.container)).toBeNull();
+        expect(run.events.status).toHaveBeenLastCalledWith("error", {
+          code: "invalid_widget_url",
+          message: "The widget session has no usable widget URL",
+        });
+      },
+    );
+
+    it("also guards the URL built from platformUrl and clientId", async () => {
+      const run = start({
+        createSession: vi.fn(async () => ({ session: SESSION })),
+        platformUrl: "https://platform.example",
+        clientId: "client-1",
+        allowedWidgetOrigins: [WIDGET_ORIGIN],
+      });
+      await settle();
+
+      expect(iframeIn(run.container)).toBeNull();
+      expect(run.events.status).toHaveBeenLastCalledWith(
+        "error",
+        expect.objectContaining({ code: "invalid_widget_url" }),
+      );
+    });
+
+    it("keeps accepting every https widget when the option is omitted", async () => {
+      const { frame } = await opened({
+        createSession: vi.fn(async () =>
+          widgetSession({
+            widget_url: "https://anywhere.example/embed/pay",
+            widget_origin: "https://anywhere.example",
+          }),
+        ),
+      });
+
+      expect(frame.getAttribute("src")).toMatch(
+        /^https:\/\/anywhere\.example\//,
+      );
     });
   });
 

@@ -98,6 +98,7 @@ A session is created only when the widget opens and is dropped when it closes. U
 | `onCredited` | `({ amount, asset }) => void` | | A deposit was credited. UI signal only, see Security. |
 | `onStatusChange`, `onError` | | | See Status. |
 | `requireChannel` | `boolean` | `false` | Refuse frames that do not prove the channel (no legacy fallback). |
+| `allowedWidgetOrigins` | `string[]` | | Origins the widget may be served from, for example `["https://binodex.app"]`. A widget URL on any other origin is refused with `invalid_widget_url` and no iframe is created. An empty list refuses every widget. Not set: any https origin the session names is accepted. |
 | `required` | `PayPart[]` | `[]` | Extra parts that must be present, on top of `frame`. |
 
 ## Parts
@@ -176,7 +177,8 @@ What is checked:
 - Your page → widget: `init` is posted with an exact target origin, never `*`, so a widget frame navigated elsewhere never receives the session. The widget accepts `init` only from its parent window, only from an origin registered for your client, only with the exact expected fields and, with a channel, only with its own channel.
 - Widget → your page: the SDK accepts a message only when it comes from its own iframe window, from the widget origin, has a known type with valid fields and, once the widget proved the channel, carries that channel. Another iframe, a popup or a second widget instance on the page cannot drive yours.
 - Secrets: the SDK only ever hands the widget the one-time `wss_` session (single use, valid for 60 seconds, bound to the user, client and mode). The widget exchanges it for a short-lived token inside the iframe.
-- `widget_url` must be https (plain http only on loopback hosts), must not carry credentials and must match `widget_origin`. Take it from the Broker API response only, never from user input.
+- `widget_url` must be https (plain http only on loopback hosts), must not carry credentials and must match `widget_origin`. Take it from the Broker API response only, never from user input. Set `allowedWidgetOrigins` to pin the widget to the Binodex origins you expect: if your session route ever returns a foreign `widget_url`, the SDK refuses it and never hands the session to that origin. The session response can name a regional widget host, so list every Binodex widget origin you expect.
+- The iframe permissions (`payment`, `clipboard-write`) are granted to the widget origin only, not to every origin.
 - The iframe is created with `referrerpolicy="origin"`: the widget learns your origin to verify it, never your page path.
 
 Out of scope, and how to handle it:

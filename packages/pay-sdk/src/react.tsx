@@ -181,6 +181,7 @@ export function Root(props: RootProps) {
           clientId: current.clientId,
           platformUrl: current.platformUrl,
           requireChannel: current.requireChannel,
+          allowedWidgetOrigins: current.allowedWidgetOrigins,
           ...frame,
         },
         {
