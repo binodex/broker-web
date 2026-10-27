@@ -31,6 +31,7 @@ export interface WidgetSession {
   expires_in?: number;
   widget_url?: string;
   widget_origin?: string;
+  widget_origins?: readonly string[];
   region?: string;
 }
 

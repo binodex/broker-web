@@ -35,8 +35,9 @@ const isTransportAllowed = (url: URL): boolean =>
   url.protocol === "https:" ||
   (url.protocol === "http:" && LOOPBACK_HOST.test(url.hostname));
 
-const normalizeOrigins = (entries: readonly string[]): string[] =>
+const normalizeOrigins = (entries: readonly unknown[]): string[] =>
   entries.flatMap((entry) => {
+    if (typeof entry !== "string") return [];
     try {
       const url = new URL(entry);
       return isTransportAllowed(url) ? [url.origin] : [];
@@ -44,6 +45,23 @@ const normalizeOrigins = (entries: readonly string[]): string[] =>
       return [];
     }
   });
+
+export const alternateLocations = (
+  location: WidgetLocation,
+  origins: unknown,
+  allowedOrigins?: readonly string[],
+): WidgetLocation[] => {
+  if (!Array.isArray(origins)) return [];
+  const allowed = allowedOrigins ? normalizeOrigins(allowedOrigins) : null;
+  const seen = new Set([location.origin]);
+  const current = new URL(location.src);
+  return normalizeOrigins(origins).flatMap((origin) => {
+    if (seen.has(origin) || (allowed && !allowed.includes(origin))) return [];
+    seen.add(origin);
+    const url = new URL(`${current.pathname}${current.search}${current.hash}`, origin);
+    return [{ src: url.toString(), origin }];
+  });
+};
 
 export const resolveWidgetLocation = (
   input: WidgetLocationInput,

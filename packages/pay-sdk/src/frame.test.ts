@@ -11,7 +11,7 @@ import {
   settle,
   widgetSession,
 } from "../test/helpers.js";
-import { runPayFrame, type FrameEvents } from "./frame.js";
+import { FRAME_ANSWER_TIMEOUT_MS, runPayFrame, type FrameEvents } from "./frame.js";
 import type { CreateSession, FrameOptions, WidgetSession } from "./types.js";
 
 type Overrides = FrameOptions & {
@@ -253,6 +253,91 @@ describe("opening the widget", () => {
     expect(frame.getAttribute("src")).toMatch(
       /^http:\/\/localhost:5173\/embed\/pay\?/,
     );
+  });
+});
+
+describe("regional domains", () => {
+  const RU_ORIGIN = "https://pay-ru.example";
+  const regional = (origins: unknown) =>
+    vi.fn<CreateSession>(async () => widgetSession({ widget_origins: origins as string[] }));
+  const openedWithTimers = async (overrides: Overrides) => {
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+    const run = start(overrides);
+    await vi.advanceTimersByTimeAsync(0);
+    const frame = iframeIn(run.container);
+    if (!frame) throw new Error("widget iframe was not created");
+    return { ...run, frame, channel: channelOf(frame) };
+  };
+
+  it("reopens the widget on the other Binodex domain when the frame never answers", async () => {
+    const { container, frame, channel, createSession } = await openedWithTimers({
+      createSession: regional([WIDGET_ORIGIN, RU_ORIGIN]),
+    });
+
+    await vi.advanceTimersByTimeAsync(FRAME_ANSWER_TIMEOUT_MS);
+
+    const frames = container.querySelectorAll("iframe");
+    expect(frames).toHaveLength(1);
+    const next = frames[0]!;
+    expect(next).not.toBe(frame);
+    const src = new URL(next.getAttribute("src") ?? "");
+    expect(`${src.origin}${src.pathname}${src.search}`).toBe(`${RU_ORIGIN}/embed/pay?mode=deposit&client_id=client-1`);
+    expect(channelOf(next)).toBe(channel);
+    expect(next.getAttribute("allow")).toBe(`payment ${RU_ORIGIN}; clipboard-write ${RU_ORIGIN}`);
+
+    const init = captureInit(next);
+    fromWidget(next, { type: "binodex-embed:ready", channel }, { origin: WIDGET_ORIGIN });
+    await vi.advanceTimersByTimeAsync(0);
+    expect(init).not.toHaveBeenCalled();
+    fromWidget(next, { type: "binodex-embed:ready", channel }, { origin: RU_ORIGIN });
+    await vi.advanceTimersByTimeAsync(0);
+    expect(init).toHaveBeenCalledWith({ type: "binodex-embed:init", session: SESSION, channel }, RU_ORIGIN);
+    expect(createSession).toHaveBeenCalledTimes(1);
+  });
+
+  it("stays on a domain that answered, however long the form takes", async () => {
+    const { container, frame, channel } = await openedWithTimers({
+      createSession: regional([WIDGET_ORIGIN, RU_ORIGIN]),
+    });
+    captureInit(frame);
+
+    fromWidget(frame, { type: "binodex-embed:ready", channel });
+    await vi.advanceTimersByTimeAsync(FRAME_ANSWER_TIMEOUT_MS * 3);
+
+    expect(iframeIn(container)).toBe(frame);
+  });
+
+  it("tries only https origins the broker allows, then keeps waiting on the last one", async () => {
+    const { container, events } = await openedWithTimers({
+      createSession: regional([WIDGET_ORIGIN, "http://pay-plain.example", "https://pay-other.example", RU_ORIGIN, 42]),
+      allowedWidgetOrigins: [WIDGET_ORIGIN, RU_ORIGIN],
+    });
+
+    await vi.advanceTimersByTimeAsync(FRAME_ANSWER_TIMEOUT_MS);
+    expect(new URL(iframeIn(container)?.getAttribute("src") ?? "").origin).toBe(RU_ORIGIN);
+    await vi.advanceTimersByTimeAsync(FRAME_ANSWER_TIMEOUT_MS * 3);
+
+    expect(new URL(iframeIn(container)?.getAttribute("src") ?? "").origin).toBe(RU_ORIGIN);
+    expect(events.status).not.toHaveBeenCalledWith("error", expect.anything());
+  });
+
+  it("keeps the old behaviour when the session lists no other domain", async () => {
+    const { container, frame } = await openedWithTimers({ createSession: regional(undefined) });
+
+    await vi.advanceTimersByTimeAsync(FRAME_ANSWER_TIMEOUT_MS * 2);
+
+    expect(iframeIn(container)).toBe(frame);
+  });
+
+  it("switches nothing after the widget is stopped", async () => {
+    const { container, stop } = await openedWithTimers({
+      createSession: regional([WIDGET_ORIGIN, RU_ORIGIN]),
+    });
+
+    stop();
+    await vi.advanceTimersByTimeAsync(FRAME_ANSWER_TIMEOUT_MS * 2);
+
+    expect(iframeIn(container)).toBeNull();
   });
 });
 

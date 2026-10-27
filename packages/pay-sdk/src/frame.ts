@@ -13,9 +13,14 @@ import type {
   PayStatus,
   PayWidgetOptions,
 } from "./types.js";
-import { resolveWidgetLocation } from "./widget-url.js";
+import {
+  alternateLocations,
+  resolveWidgetLocation,
+  type WidgetLocation,
+} from "./widget-url.js";
 
 const DEFAULT_HEIGHTS = { initial: 720, min: 520, max: 900 } as const;
+export const FRAME_ANSWER_TIMEOUT_MS = 8_000;
 const FRAME_FEATURES = ["payment", "clipboard-write"] as const;
 
 export interface FrameEvents {
@@ -93,6 +98,14 @@ export const runPayFrame = (
   let initInFlight = false;
   let shown = false;
   let status: PayStatus = "idle";
+  let answered = false;
+  let alternates: WidgetLocation[] = [];
+  let answerTimer: ReturnType<typeof setTimeout> | null = null;
+
+  const clearAnswerTimer = () => {
+    if (answerTimer !== null) clearTimeout(answerTimer);
+    answerTimer = null;
+  };
 
   const setStatus = (next: PayStatus, error: PayError | null = null) => {
     if (stopped || (next === status && next !== "error")) return;
@@ -180,11 +193,41 @@ export const runPayFrame = (
     } else {
       protocol = 1;
     }
+    answered = true;
+    clearAnswerTimer();
     handle(envelope.event);
   };
 
   const onLoad = () => {
     if (status === "loading") setStatus("handshake");
+  };
+
+  const mountFrame = (location: WidgetLocation) => {
+    if (frame) {
+      frame.removeEventListener("load", onLoad);
+      frame.remove();
+    }
+    widgetOrigin = location.origin;
+    protocol = null;
+    frame = createFrame(
+      location.src,
+      location.origin,
+      options.title || (options.mode === "withdraw" ? "Withdraw" : "Deposit"),
+      bounds.initial,
+    );
+    frame.addEventListener("load", onLoad);
+    setStatus("loading");
+    container.appendChild(frame);
+    if (alternates.length > 0) {
+      answerTimer = setTimeout(failOver, FRAME_ANSWER_TIMEOUT_MS);
+    }
+  };
+
+  const failOver = () => {
+    answerTimer = null;
+    const next = alternates.shift();
+    if (stopped || answered || !next) return;
+    mountFrame(next);
   };
 
   events.height(bounds.initial);
@@ -209,17 +252,13 @@ export const runPayFrame = (
         );
       }
       held = holdSession(session, Date.now());
-      widgetOrigin = location.origin;
-      frame = createFrame(
-        location.src,
-        location.origin,
-        options.title || (options.mode === "withdraw" ? "Withdraw" : "Deposit"),
-        bounds.initial,
+      alternates = alternateLocations(
+        location,
+        session.widget_origins,
+        options.allowedWidgetOrigins,
       );
-      frame.addEventListener("load", onLoad);
       window.addEventListener("message", onMessage);
-      setStatus("loading");
-      container.appendChild(frame);
+      mountFrame(location);
     })
     .catch(fail);
 
@@ -227,6 +266,7 @@ export const runPayFrame = (
     if (stopped) return;
     stopped = true;
     abort.abort();
+    clearAnswerTimer();
     window.removeEventListener("message", onMessage);
     if (frame) {
       frame.removeEventListener("load", onLoad);

@@ -1,6 +1,6 @@
 {
   "name": "@binopartner/pay-sdk",
-  "version": "0.1.1",
+  "version": "0.3.0",
   "license": "UNLICENSED",
   "repository": {
     "type": "git",
@@ -8,9 +8,28 @@
     "directory": "packages/pay-sdk"
   },
   "homepage": "https://github.com/binodex/broker-web/tree/main/packages/pay-sdk#readme",
-  "description": "Embed the Binodex deposit and withdrawal widget: a root component, composable parts and a hardened iframe channel.",
+  "description": "Binodex deposits and withdrawals for broker sites: a hardened iframe widget, a headless core and React elements.",
   "type": "module",
-  "sideEffects": false,
+  "sideEffects": [
+    "*.css"
+  ],
+  "types": "./dist/index.d.ts",
+  "typesVersions": {
+    "*": {
+      "react": [
+        "./dist/react.d.ts"
+      ],
+      "core": [
+        "./dist/core/index.d.ts"
+      ],
+      "elements": [
+        "./dist/elements/index.d.ts"
+      ],
+      "ui": [
+        "./dist/ui/index.d.ts"
+      ]
+    }
+  },
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",
@@ -22,6 +41,24 @@
       "import": "./dist/react.js",
       "default": "./dist/react.js"
     },
+    "./core": {
+      "types": "./dist/core/index.d.ts",
+      "import": "./dist/core/index.js",
+      "default": "./dist/core/index.js"
+    },
+    "./elements": {
+      "types": "./dist/elements/index.d.ts",
+      "import": "./dist/elements/index.js",
+      "default": "./dist/elements/index.js"
+    },
+    "./ui": {
+      "types": "./dist/ui/index.d.ts",
+      "import": "./dist/ui/index.js",
+      "default": "./dist/ui/index.js"
+    },
+    "./elements.css": "./dist/elements.css",
+    "./ui.css": "./dist/ui.css",
+    "./fonts.css": "./dist/fonts.css",
     "./package.json": "./package.json"
   },
   "files": [
@@ -29,9 +66,10 @@
     "README.md"
   ],
   "scripts": {
-    "build": "node -e \"require('node:fs').rmSync('dist',{recursive:true,force:true})\" && tsc -p tsconfig.build.json",
+    "build": "node -e \"require('node:fs').rmSync('dist',{recursive:true,force:true})\" && tsc -p tsconfig.build.json && node scripts/copy-css.mjs",
     "typecheck": "tsc -p tsconfig.json",
-    "test": "vitest run"
+    "test": "vitest run",
+    "size": "node scripts/size.mjs"
   },
   "peerDependencies": {
     "react": ">=18"
@@ -42,8 +80,11 @@
     }
   },
   "devDependencies": {
+    "@types/qrcode": "1.5.5",
     "@types/react": "^19.2.18",
     "jsdom": "^27.4.0",
+    "jsqr": "1.4.0",
+    "qrcode": "1.5.4",
     "react": "^19.2.8",
     "react-dom": "^19.2.8",
     "typescript": "^5",
