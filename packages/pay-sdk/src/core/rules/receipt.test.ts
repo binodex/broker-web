@@ -30,6 +30,23 @@ describe("receipt rules", () => {
     expect(getRuReceiptRuleForMethod("sbp", null)).toBeNull();
   });
 
+  it("MeridianPay takes a PDF receipt by the deposit rail and by the picker card", () => {
+    expect(getRuReceiptRule("meridianpay", "card")).toEqual({ pdfOnly: true });
+    expect(getRuReceiptRule("meridianpay", "phone")).toEqual({ pdfOnly: true });
+    expect(getRuReceiptRuleForMethod("c2c", ["meridianpay"])).toEqual({ pdfOnly: true });
+    expect(getRuReceiptRuleForMethod("sbp", ["meridianpay"])).toEqual({ pdfOnly: true });
+  });
+
+  it("a card rail takes a receipt only with MeridianPay", () => {
+    expect(requiresRuReceipt("paylee", "card")).toBe(false);
+    expect(requiresRuReceipt("paayzen", "phone")).toBe(false);
+  });
+
+  it("a rail shared with Paayzen is not known to be PDF only before create", () => {
+    expect(getRuReceiptRuleForMethod("sbp", ["paayzen", "meridianpay"])).toBeNull();
+    expect(getRuReceiptRuleForMethod("c2c", ["meridianpay", "paayzen"])).toBeNull();
+  });
+
   it("needs both the provider and the method", () => {
     expect(getRuReceiptRule(null, "sbp")).toBeNull();
     expect(getRuReceiptRule("paayzen", undefined)).toBeNull();
