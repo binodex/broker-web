@@ -19,6 +19,14 @@ const RECEIPT_RULES: Record<string, Record<string, ReceiptRule>> = {
     card: { pdfOnly: true },
     phone: { pdfOnly: true },
   },
+  // Sakura takes a receipt only in its BT PDF account (`bt`): picker cards `c2c` and `sbp`, deposit rails
+  // `card@bt` and `phone@bt`. Its other rails (`card@psb`, `phone@tj`, ...) take no receipt.
+  sakura: {
+    c2c: { pdfOnly: true },
+    sbp: { pdfOnly: true },
+    "card@bt": { pdfOnly: true },
+    "phone@bt": { pdfOnly: true },
+  },
 };
 
 // Paylee stores the rail as `any-qr` while the picker card id is `any_qr`; both must hit the same rule.
