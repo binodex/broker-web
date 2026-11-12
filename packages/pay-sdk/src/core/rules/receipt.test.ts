@@ -47,6 +47,25 @@ describe("receipt rules", () => {
     expect(getRuReceiptRuleForMethod("c2c", ["meridianpay", "paayzen"])).toBeNull();
   });
 
+  it("Sakura BT PDF takes a PDF receipt by the deposit rail and by the picker card", () => {
+    expect(getRuReceiptRule("sakura", "card@bt")).toEqual({ pdfOnly: true });
+    expect(getRuReceiptRule("sakura", "phone@bt")).toEqual({ pdfOnly: true });
+    expect(getRuReceiptRuleForMethod("c2c", ["sakura"])).toEqual({ pdfOnly: true });
+    expect(getRuReceiptRuleForMethod("sbp", ["sakura"])).toEqual({ pdfOnly: true });
+  });
+
+  it("MeridianPay and Sakura together keep the PDF receipt on the picker card", () => {
+    expect(getRuReceiptRuleForMethod("c2c", ["meridianpay", "sakura"])).toEqual({ pdfOnly: true });
+    expect(getRuReceiptRuleForMethod("sbp", ["sakura", "meridianpay"])).toEqual({ pdfOnly: true });
+  });
+
+  it("other Sakura rails take no receipt", () => {
+    expect(requiresRuReceipt("sakura", "card@psb")).toBe(false);
+    expect(requiresRuReceipt("sakura", "phone@tj")).toBe(false);
+    expect(getRuReceiptRuleForMethod("psb", ["sakura"])).toBeNull();
+    expect(getRuReceiptRuleForMethod("trans_phone", ["sakura"])).toBeNull();
+  });
+
   it("needs both the provider and the method", () => {
     expect(getRuReceiptRule(null, "sbp")).toBeNull();
     expect(getRuReceiptRule("paayzen", undefined)).toBeNull();
