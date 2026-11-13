@@ -1,0 +1,278 @@
+name: Publish @binopartner/pay-sdk
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'packages/pay-sdk/**'
+      - 'package.json'
+      - 'package-lock.json'
+      - '.github/workflows/publish-pay-sdk.yml'
+  pull_request:
+    branches:
+      - main
+    paths:
+      - 'packages/pay-sdk/**'
+      - 'package.json'
+      - 'package-lock.json'
+      - '.github/workflows/publish-pay-sdk.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Typecheck pay-sdk
+        run: npm run typecheck -w @binopartner/pay-sdk
+
+      - name: Run pay-sdk tests
+        run: npm test -w @binopartner/pay-sdk
+
+      - name: Build pay-sdk
+        run: npm run build -w @binopartner/pay-sdk
+
+      - name: Check bundle size
+        run: npm run size -w @binopartner/pay-sdk
+
+      - name: Dry-run package tarball
+        working-directory: packages/pay-sdk
+        run: npm pack --dry-run
+
+      - name: Verify version bump on runtime changes
+        if: github.event_name == 'pull_request'
+        env:
+          BASE_REF: ${{ github.base_ref }}
+        run: |
+          node --input-type=module <<'EOF'
+          import { execFileSync } from "node:child_process";
+          import { readFileSync } from "node:fs";
+
+          const pkg = JSON.parse(readFileSync("packages/pay-sdk/package.json", "utf8"));
+          const changed = execFileSync(
+            "git",
+            ["diff", "--name-only", `origin/${process.env.BASE_REF}...HEAD`, "--", "packages/pay-sdk"],
+            { encoding: "utf8" }
+          )
+            .split("\n")
+            .map((f) => f.trim())
+            .filter(Boolean);
+
+          const isRuntimeFile = (file) =>
+            file !== "packages/pay-sdk/README.md" &&
+            file !== "packages/pay-sdk/vitest.config.ts" &&
+            file !== "packages/pay-sdk/tsconfig.json" &&
+            !file.startsWith("packages/pay-sdk/test/") &&
+            !/\.test\.tsx?$/.test(file);
+
+          const runtimeChanged = changed.filter(isRuntimeFile);
+          if (runtimeChanged.length === 0) {
+            process.exit(0);
+          }
+
+          const encoded = encodeURIComponent(pkg.name);
+          let res;
+          for (let attempt = 1; attempt <= 3; attempt++) {
+            res = await fetch(`https://registry.npmjs.org/${encoded}`);
+            if (res.ok || res.status === 404) break;
+            if (attempt < 3) await new Promise((r) => setTimeout(r, 2000 * attempt));
+          }
+          if (res.status === 404) {
+            process.exit(0);
+          }
+          if (!res.ok) {
+            throw new Error(`Registry check failed with HTTP ${res.status}`);
+          }
+          const data = await res.json();
+          if (data.versions && data.versions[pkg.version]) {
+            console.error(
+              `::error::Runtime files in packages/pay-sdk changed (${runtimeChanged.join(", ")}), ` +
+              `but ${pkg.name}@${pkg.version} is already published on npm. ` +
+              `Bump "version" in packages/pay-sdk/package.json.`
+            );
+            process.exit(1);
+          }
+          EOF
+
+  publish:
+    needs: verify
+    if: >-
+      github.repository == 'binodex/broker-web' &&
+      github.ref == 'refs/heads/main' &&
+      (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
+    runs-on: ubuntu-latest
+    concurrency:
+      group: publish-pay-sdk
+      cancel-in-progress: false
+    permissions:
+      contents: write
+      id-token: write
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Check npm registry for current version
+        id: check
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          BEFORE_SHA: ${{ github.event.before }}
+          HEAD_SHA: ${{ github.sha }}
+        run: |
+          node --input-type=module <<'EOF'
+          import { execFileSync } from "node:child_process";
+          import { appendFileSync, readFileSync } from "node:fs";
+
+          const pkg = JSON.parse(readFileSync("packages/pay-sdk/package.json", "utf8"));
+          const encoded = encodeURIComponent(pkg.name);
+
+          let res;
+          for (let attempt = 1; attempt <= 3; attempt++) {
+            res = await fetch(`https://registry.npmjs.org/${encoded}`);
+            if (res.ok || res.status === 404) break;
+            if (attempt < 3) await new Promise((r) => setTimeout(r, 2000 * attempt));
+          }
+          if (!res.ok && res.status !== 404) {
+            throw new Error(`Registry check failed with HTTP ${res.status}`);
+          }
+
+          const data = res.status === 404 ? { versions: {} } : await res.json();
+          const alreadyPublished = Boolean(data.versions && data.versions[pkg.version]);
+
+          appendFileSync(process.env.GITHUB_OUTPUT, `version=${pkg.version}\n`);
+
+          if (!alreadyPublished) {
+            appendFileSync(process.env.GITHUB_OUTPUT, "should_publish=true\n");
+            console.log(`Will publish ${pkg.name}@${pkg.version} to npm.`);
+            process.exit(0);
+          }
+
+          appendFileSync(process.env.GITHUB_OUTPUT, "should_publish=false\n");
+
+          const before = process.env.BEFORE_SHA || "";
+          const isPush = process.env.EVENT_NAME === "push" && before && !/^0+$/.test(before);
+          if (isPush) {
+            let changed = [];
+            try {
+              changed = execFileSync(
+                "git",
+                ["diff", "--name-only", before, process.env.HEAD_SHA, "--", "packages/pay-sdk"],
+                { encoding: "utf8" }
+              )
+                .split("\n")
+                .map((f) => f.trim())
+                .filter(Boolean);
+            } catch {
+              changed = [];
+            }
+            const runtimeChanged = changed.filter(
+              (file) =>
+                file !== "packages/pay-sdk/README.md" &&
+                file !== "packages/pay-sdk/vitest.config.ts" &&
+                file !== "packages/pay-sdk/tsconfig.json" &&
+                !file.startsWith("packages/pay-sdk/test/") &&
+                !/\.test\.tsx?$/.test(file)
+            );
+            if (runtimeChanged.length > 0) {
+              console.error(
+                `::error::Runtime files in packages/pay-sdk changed on main (${runtimeChanged.join(", ")}), ` +
+                `but ${pkg.name}@${pkg.version} is already published on npm. ` +
+                `Bump "version" in packages/pay-sdk/package.json to publish a new version.`
+              );
+              process.exit(1);
+            }
+          }
+
+          console.log(`::notice::${pkg.name}@${pkg.version} is already published on npm; skipping publish.`);
+          EOF
+
+      - name: Setup Node.js
+        if: steps.check.outputs.should_publish == 'true'
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: 'npm'
+
+      - name: Ensure npm supports OIDC trusted publishing
+        if: steps.check.outputs.should_publish == 'true'
+        run: |
+          node -e '
+            const [maj, min, pat] = process.argv[1].split(".").map((n) => parseInt(n, 10) || 0);
+            const ok = maj > 11 || (maj === 11 && (min > 5 || (min === 5 && pat >= 1)));
+            process.exit(ok ? 0 : 1);
+          ' "$(npm -v)" || npm install -g npm@^11.5.1
+
+      - name: Install dependencies
+        if: steps.check.outputs.should_publish == 'true'
+        run: npm ci
+
+      - name: Build and verify pay-sdk
+        if: steps.check.outputs.should_publish == 'true'
+        run: |
+          npm run typecheck -w @binopartner/pay-sdk
+          npm test -w @binopartner/pay-sdk
+          npm run build -w @binopartner/pay-sdk
+          npm run size -w @binopartner/pay-sdk
+
+      - name: Publish to npm
+        if: steps.check.outputs.should_publish == 'true'
+        working-directory: packages/pay-sdk
+        env:
+          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: |
+          set -euo pipefail
+          if [ -n "${NPM_TOKEN:-}" ]; then
+            trap 'npm config delete //registry.npmjs.org/:_authToken --location=user 2>/dev/null || true' EXIT
+            npm config set //registry.npmjs.org/:_authToken "${NPM_TOKEN}" --location=user
+          fi
+          npm publish --provenance --access public
+
+      - name: Tag release in git
+        if: steps.check.outputs.should_publish == 'true'
+        env:
+          VERSION: ${{ steps.check.outputs.version }}
+        run: |
+          set -euo pipefail
+          TAG="pay-sdk-v${VERSION}"
+          if git ls-remote --exit-code --tags origin "refs/tags/${TAG}" >/dev/null 2>&1; then
+            echo "Tag ${TAG} already exists on origin."
+          else
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git tag -a "${TAG}" -m "@binopartner/pay-sdk ${VERSION}"
+            git push origin "refs/tags/${TAG}" || echo "::warning::Published to npm, but could not push git tag ${TAG}."
+          fi
+
+      - name: Write job summary
+        if: steps.check.outputs.should_publish == 'true'
+        env:
+          VERSION: ${{ steps.check.outputs.version }}
+        run: |
+          {
+            echo "### Published @binopartner/pay-sdk@${VERSION}"
+            echo ""
+            echo "- Registry: https://www.npmjs.com/package/@binopartner/pay-sdk/v/${VERSION}"
+            echo "- Tag: \`pay-sdk-v${VERSION}\`"
+          } >> "$GITHUB_STEP_SUMMARY"
