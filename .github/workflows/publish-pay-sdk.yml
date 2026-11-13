@@ -18,6 +18,16 @@ on:
       - 'package-lock.json'
       - '.github/workflows/publish-pay-sdk.yml'
   workflow_dispatch:
+    inputs:
+      bump:
+        description: 'Version bump when current version is already published on npm'
+        required: false
+        default: 'patch'
+        type: choice
+        options:
+          - patch
+          - minor
+          - major
 
 permissions:
   contents: read
@@ -32,7 +42,6 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
-          fetch-depth: 0
           persist-credentials: false
 
       - name: Setup Node.js
@@ -60,61 +69,6 @@ jobs:
         working-directory: packages/pay-sdk
         run: npm pack --dry-run
 
-      - name: Verify version bump on runtime changes
-        if: github.event_name == 'pull_request'
-        env:
-          BASE_REF: ${{ github.base_ref }}
-        run: |
-          node --input-type=module <<'EOF'
-          import { execFileSync } from "node:child_process";
-          import { readFileSync } from "node:fs";
-
-          const pkg = JSON.parse(readFileSync("packages/pay-sdk/package.json", "utf8"));
-          const changed = execFileSync(
-            "git",
-            ["diff", "--name-only", `origin/${process.env.BASE_REF}...HEAD`, "--", "packages/pay-sdk"],
-            { encoding: "utf8" }
-          )
-            .split("\n")
-            .map((f) => f.trim())
-            .filter(Boolean);
-
-          const isRuntimeFile = (file) =>
-            file !== "packages/pay-sdk/README.md" &&
-            file !== "packages/pay-sdk/vitest.config.ts" &&
-            file !== "packages/pay-sdk/tsconfig.json" &&
-            !file.startsWith("packages/pay-sdk/test/") &&
-            !/\.test\.tsx?$/.test(file);
-
-          const runtimeChanged = changed.filter(isRuntimeFile);
-          if (runtimeChanged.length === 0) {
-            process.exit(0);
-          }
-
-          const encoded = encodeURIComponent(pkg.name);
-          let res;
-          for (let attempt = 1; attempt <= 3; attempt++) {
-            res = await fetch(`https://registry.npmjs.org/${encoded}`);
-            if (res.ok || res.status === 404) break;
-            if (attempt < 3) await new Promise((r) => setTimeout(r, 2000 * attempt));
-          }
-          if (res.status === 404) {
-            process.exit(0);
-          }
-          if (!res.ok) {
-            throw new Error(`Registry check failed with HTTP ${res.status}`);
-          }
-          const data = await res.json();
-          if (data.versions && data.versions[pkg.version]) {
-            console.error(
-              `::error::Runtime files in packages/pay-sdk changed (${runtimeChanged.join(", ")}), ` +
-              `but ${pkg.name}@${pkg.version} is already published on npm. ` +
-              `Bump "version" in packages/pay-sdk/package.json.`
-            );
-            process.exit(1);
-          }
-          EOF
-
   publish:
     needs: verify
     if: >-
@@ -134,16 +88,25 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Check npm registry for current version
+      - name: Resolve target version
         id: check
         env:
           EVENT_NAME: ${{ github.event_name }}
           BEFORE_SHA: ${{ github.event.before }}
           HEAD_SHA: ${{ github.sha }}
+          BUMP_TYPE: ${{ inputs.bump || 'patch' }}
         run: |
           node --input-type=module <<'EOF'
           import { execFileSync } from "node:child_process";
           import { appendFileSync, readFileSync } from "node:fs";
+
+          const parseSemver = (v) => {
+            const m = /^(\d+)\.(\d+)\.(\d+)$/.exec(String(v).trim());
+            return m ? [Number(m[1]), Number(m[2]), Number(m[3])] : null;
+          };
+
+          const compareSemver = (a, b) =>
+            a[0] - b[0] || a[1] - b[1] || a[2] - b[2];
 
           const pkg = JSON.parse(readFileSync("packages/pay-sdk/package.json", "utf8"));
           const encoded = encodeURIComponent(pkg.name);
@@ -159,53 +122,82 @@ jobs:
           }
 
           const data = res.status === 404 ? { versions: {} } : await res.json();
-          const alreadyPublished = Boolean(data.versions && data.versions[pkg.version]);
-
-          appendFileSync(process.env.GITHUB_OUTPUT, `version=${pkg.version}\n`);
+          const versionsMap = data.versions || {};
+          const alreadyPublished = Boolean(versionsMap[pkg.version]);
 
           if (!alreadyPublished) {
+            appendFileSync(process.env.GITHUB_OUTPUT, `version=${pkg.version}\n`);
             appendFileSync(process.env.GITHUB_OUTPUT, "should_publish=true\n");
+            appendFileSync(process.env.GITHUB_OUTPUT, "needs_bump=false\n");
             console.log(`Will publish ${pkg.name}@${pkg.version} to npm.`);
             process.exit(0);
           }
 
-          appendFileSync(process.env.GITHUB_OUTPUT, "should_publish=false\n");
-
-          const before = process.env.BEFORE_SHA || "";
-          const isPush = process.env.EVENT_NAME === "push" && before && !/^0+$/.test(before);
-          if (isPush) {
+          if (process.env.EVENT_NAME === "push") {
+            const before = process.env.BEFORE_SHA || "";
             let changed = [];
-            try {
-              changed = execFileSync(
-                "git",
-                ["diff", "--name-only", before, process.env.HEAD_SHA, "--", "packages/pay-sdk"],
-                { encoding: "utf8" }
-              )
-                .split("\n")
-                .map((f) => f.trim())
-                .filter(Boolean);
-            } catch {
-              changed = [];
+            if (before && !/^0+$/.test(before)) {
+              try {
+                changed = execFileSync(
+                  "git",
+                  ["diff", "--name-only", before, process.env.HEAD_SHA, "--", "packages/pay-sdk"],
+                  { encoding: "utf8" }
+                )
+                  .split("\n")
+                  .map((f) => f.trim())
+                  .filter(Boolean);
+              } catch {
+                changed = [];
+              }
             }
-            const runtimeChanged = changed.filter(
+            const publishableChanged = changed.filter(
               (file) =>
-                file !== "packages/pay-sdk/README.md" &&
                 file !== "packages/pay-sdk/vitest.config.ts" &&
                 file !== "packages/pay-sdk/tsconfig.json" &&
                 !file.startsWith("packages/pay-sdk/test/") &&
                 !/\.test\.tsx?$/.test(file)
             );
-            if (runtimeChanged.length > 0) {
-              console.error(
-                `::error::Runtime files in packages/pay-sdk changed on main (${runtimeChanged.join(", ")}), ` +
-                `but ${pkg.name}@${pkg.version} is already published on npm. ` +
-                `Bump "version" in packages/pay-sdk/package.json to publish a new version.`
-              );
-              process.exit(1);
+            if (publishableChanged.length === 0) {
+              appendFileSync(process.env.GITHUB_OUTPUT, `version=${pkg.version}\n`);
+              appendFileSync(process.env.GITHUB_OUTPUT, "should_publish=false\n");
+              appendFileSync(process.env.GITHUB_OUTPUT, "needs_bump=false\n");
+              console.log(`::notice::No publishable changes in packages/pay-sdk and ${pkg.name}@${pkg.version} is already on npm; skipping.`);
+              process.exit(0);
             }
           }
 
-          console.log(`::notice::${pkg.name}@${pkg.version} is already published on npm; skipping publish.`);
+          const candidates = [pkg.version, ...Object.keys(versionsMap)]
+            .map(parseSemver)
+            .filter(Boolean)
+            .sort(compareSemver);
+
+          const highest = candidates.length > 0 ? candidates[candidates.length - 1] : [0, 1, 0];
+          const bumpType = process.env.EVENT_NAME === "workflow_dispatch"
+            ? (process.env.BUMP_TYPE || "patch")
+            : "patch";
+
+          let [maj, min, pat] = highest;
+          if (bumpType === "major") {
+            maj += 1;
+            min = 0;
+            pat = 0;
+          } else if (bumpType === "minor") {
+            min += 1;
+            pat = 0;
+          } else {
+            pat += 1;
+          }
+
+          let nextVersion = `${maj}.${min}.${pat}`;
+          while (versionsMap[nextVersion]) {
+            pat += 1;
+            nextVersion = `${maj}.${min}.${pat}`;
+          }
+
+          appendFileSync(process.env.GITHUB_OUTPUT, `version=${nextVersion}\n`);
+          appendFileSync(process.env.GITHUB_OUTPUT, "should_publish=true\n");
+          appendFileSync(process.env.GITHUB_OUTPUT, "needs_bump=true\n");
+          console.log(`Auto-bumping ${pkg.name} to ${nextVersion} and publishing to npm.`);
           EOF
 
       - name: Setup Node.js
@@ -228,6 +220,12 @@ jobs:
         if: steps.check.outputs.should_publish == 'true'
         run: npm ci
 
+      - name: Bump package version
+        if: steps.check.outputs.should_publish == 'true' && steps.check.outputs.needs_bump == 'true'
+        env:
+          VERSION: ${{ steps.check.outputs.version }}
+        run: npm version "${VERSION}" --no-git-tag-version -w @binopartner/pay-sdk
+
       - name: Build and verify pay-sdk
         if: steps.check.outputs.should_publish == 'true'
         run: |
@@ -249,18 +247,29 @@ jobs:
           fi
           npm publish --provenance --access public
 
-      - name: Tag release in git
+      - name: Commit version bump and tag release
         if: steps.check.outputs.should_publish == 'true'
         env:
           VERSION: ${{ steps.check.outputs.version }}
+          NEEDS_BUMP: ${{ steps.check.outputs.needs_bump }}
         run: |
           set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          if [ "${NEEDS_BUMP}" = "true" ]; then
+            git add packages/pay-sdk/package.json package-lock.json
+            git commit -m "chore(pay-sdk): release ${VERSION} [skip ci]"
+            if ! (git pull --rebase origin main && git push origin HEAD:main); then
+              git rebase --abort 2>/dev/null || true
+              echo "::warning::Published ${VERSION} to npm, but could not push version commit back to main."
+            fi
+          fi
+
           TAG="pay-sdk-v${VERSION}"
           if git ls-remote --exit-code --tags origin "refs/tags/${TAG}" >/dev/null 2>&1; then
             echo "Tag ${TAG} already exists on origin."
           else
-            git config user.name "github-actions[bot]"
-            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
             git tag -a "${TAG}" -m "@binopartner/pay-sdk ${VERSION}"
             git push origin "refs/tags/${TAG}" || echo "::warning::Published to npm, but could not push git tag ${TAG}."
           fi
