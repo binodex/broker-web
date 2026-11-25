@@ -64,7 +64,7 @@ export const de: Messages = {
   "qr.label": "QR-Code für die Zahlung",
   "onramp.title": "Krypto kaufen",
   "onramp.open": "In neuem Tab öffnen",
-  "onramp.disclosure": "Die Kartenzahlung wird von Onramper und seinen Partnern abgewickelt. Guthaben wird nach On-Chain-Bestätigung gutgeschrieben.",
+  "onramp.disclosure": "Die Kartenzahlung wird von Coindisco und seinen Partneranbietern abgewickelt. Das Guthaben wird Ihrem Handelskonto nach der Bestätigung in der Blockchain gutgeschrieben.",
   "address.label": "Wallet-Adresse",
   "address.placeholder": "Adresse einfügen",
   "address.invalid.evm": "Ungültige Adresse: erwartet wird 0x gefolgt von 40 Hex-Zeichen",

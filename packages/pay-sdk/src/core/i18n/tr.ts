@@ -64,7 +64,7 @@ export const tr: Messages = {
   "qr.label": "Ödeme için QR kodu",
   "onramp.title": "Kripto satın al",
   "onramp.open": "Yeni sekmede aç",
-  "onramp.disclosure": "Kart ödemesi Onramper ve ortakları tarafından işlenir. Fonlar zincir üstü onay sonrasında hesaba yansır.",
+  "onramp.disclosure": "Kartla ödeme Coindisco ve iş ortağı sağlayıcıları tarafından işlenir. Fonlar, blokzincirde onaylandıktan sonra işlem bakiyenize yatırılır.",
   "address.label": "Cüzdan adresi",
   "address.placeholder": "Adresi yapıştırın",
   "address.invalid.evm": "Geçersiz adres: 0x ve ardından 40 onaltılık karakter bekleniyor",

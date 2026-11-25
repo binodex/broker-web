@@ -64,7 +64,7 @@ export const cs: Messages = {
   "qr.label": "QR kód pro platbu",
   "onramp.title": "Koupit krypto",
   "onramp.open": "Otevřít na nové kartě",
-  "onramp.disclosure": "Platbu kartou zpracovává Onramper a jeho partnerští poskytovatelé. Prostředky budou připsány na váš obchodní zůstatek po potvrzení v blockchainu.",
+  "onramp.disclosure": "Platbu kartou zpracovává Coindisco a jeho partnerští poskytovatelé. Prostředky budou připsány na váš obchodní zůstatek po potvrzení v blockchainu.",
   "address.label": "Adresa peněženky",
   "address.placeholder": "Vložte adresu",
   "address.invalid.evm": "Neplatná adresa: očekává se 0x a 40 hexadecimálních znaků",

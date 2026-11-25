@@ -149,9 +149,12 @@ export const DepositForm = forwardRef<HTMLDivElement, DepositFormProps>(function
           ) : onrampSelected ? (
             <div className={isUnstyled ? undefined : "bp-onramp-tab"}>
               <c.Onramp />
-              <p className={isUnstyled ? undefined : "bp-onramp-note"} data-binodex-pay="onramp-note">
-                {root.t("onramp.disclosure")}
-              </p>
+              {/* With the session URL only: the note never sits under a loader or an error. */}
+              {state?.onrampUrl ? (
+                <p className={isUnstyled ? undefined : "bp-onramp-note"} data-binodex-pay="onramp-note">
+                  {root.t("onramp.disclosure")}
+                </p>
+              ) : null}
             </div>
           ) : (
             <c.ErrorMessage />

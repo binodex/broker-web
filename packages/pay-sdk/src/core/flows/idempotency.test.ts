@@ -295,7 +295,7 @@ describe("deposit idempotency lifecycle and flow boundaries", () => {
     let deposits: unknown[] = [];
     const t = depositSetup((request) => {
       if (request.path === "/broker/pay/activity") return json(200, { server_time: Date.now(), deposits, withdrawals: [] });
-      if (request.path === "/broker/pay/onramp/session") return json(200, { url: "https://buy.onramper.com/x", single_use: true });
+      if (request.path === "/broker/pay/onramp/session") return json(200, { url: "https://widget.coindisco.com/x", single_use: true });
       return undefined;
     });
     t.flow.actions.start();

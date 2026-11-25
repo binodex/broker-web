@@ -263,7 +263,7 @@ Every component accepts `className`, `style` and `unstyled`, forwards its ref an
 | `Quote` | Fees, amount received, ETA, slippage. |
 | `CryptoAddress` | Address, copy button, QR code (rendered locally, no image host), network warning, high-fee warning. |
 | `Requisites` | Fiat payment details: raw rows with copy buttons, or the requisites frame (see Security). `data-delivery="raw" \| "frame"`. |
-| `RequisitesFrame`, `ReceiptUpload`, `Countdown`, `RedirectButton`, `Onramp` | Frame, receipt upload (RU deposits in raw mode; in frame mode the receipt is uploaded inside the frame), server-clock countdown, hosted page link, onramp (`display="embed" \| "tab"`). |
+| `RequisitesFrame`, `ReceiptUpload`, `Countdown`, `RedirectButton`, `Onramp` | Frame, receipt upload (RU deposits in raw mode; in frame mode the receipt is uploaded inside the frame), server-clock countdown, hosted page link, onramp link (opens Coindisco in a new tab: Coindisco frames only on the origins listed in its dashboard, so `display` and `height` are ignored). |
 | `SlippageWarning`, `SubmitButton`, `Status`, `BackButton`, `Qr` | |
 | `RestartButton`, `MethodNotice` | Cancel / new payment for card deposits (and a new withdrawal after a final status); the receipt notice under the amount for rails that may need a receipt. |
 | `DepositForm`, `WithdrawForm` | Full screens composed from the parts above, laid out like the binodex payment modal: a card with the title, the balance and a close button, the Crypto / Card tabs, the payment country and the bank tiles. Replace any piece: `<Pay.DepositForm components={{ MethodPicker: MyPicker }} />`. |
@@ -309,7 +309,7 @@ The pay API and the requisites frame are served by two regional host pairs (glob
 
 ```
 connect-src 'self' https://api.binodex.app https://api.binodex.pro;
-frame-src https://binodex.app https://binodex.pro https://*.onramper.com;
+frame-src https://binodex.app https://binodex.pro;
 font-src https://binodex.app https://binodex.pro;
 img-src 'self' data: https:;
 ```

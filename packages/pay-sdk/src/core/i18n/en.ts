@@ -59,7 +59,7 @@ export const en = {
   "redirect.hint": "The payment page opens in a new tab.",
   "onramp.title": "Buy crypto",
   "onramp.open": "Open in a new tab",
-  "onramp.disclosure": "Card payment is processed by Onramper and its provider partners. Funds are credited to your trading balance after on-chain confirmation.",
+  "onramp.disclosure": "Card payment is processed by Coindisco and its provider partners. Funds are credited to your trading balance after on-chain confirmation.",
   "address.label": "Wallet address",
   "address.placeholder": "Paste the address",
   "address.invalid.evm": "Invalid address: expected 0x followed by 40 hex characters",

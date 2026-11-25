@@ -9,7 +9,6 @@ import {
   type AnchorHTMLAttributes,
   type ButtonHTMLAttributes,
   type HTMLAttributes,
-  type IframeHTMLAttributes,
   type ReactNode,
 } from "react";
 import type { PayError } from "../../core/errors.js";
@@ -477,11 +476,21 @@ export const MethodNotice = forwardRef<HTMLDivElement, DivProps>(function Method
   );
 });
 
-export type OnrampProps = Omit<IframeHTMLAttributes<HTMLIFrameElement>, "className" | "style" | "src"> &
-  PartStyleProps & { display?: "embed" | "tab"; height?: number };
+/**
+ * The card on-ramp is Coindisco, which lets itself be framed only on the origins
+ * listed in its dashboard, never on a broker's site: the session URL always
+ * opens in a new tab.
+ */
+export type OnrampProps = Omit<AnchorHTMLAttributes<HTMLAnchorElement>, "className" | "style" | "href"> &
+  PartStyleProps & {
+    /** @deprecated Ignored: the on-ramp always opens in a new tab. */
+    display?: "embed" | "tab";
+    /** @deprecated Ignored: the on-ramp always opens in a new tab. */
+    height?: number;
+  };
 
-export const Onramp = forwardRef<HTMLIFrameElement, OnrampProps>(function Onramp(
-  { display = "embed", height = 560, className, style, unstyled, title, ...rest },
+export const Onramp = forwardRef<HTMLAnchorElement, OnrampProps>(function Onramp(
+  { display: _display, height: _height, className, style, unstyled, ...rest },
   ref,
 ) {
   const { root, actions, state } = useDeposit("<Pay.Onramp>");
@@ -509,24 +518,18 @@ export const Onramp = forwardRef<HTMLIFrameElement, OnrampProps>(function Onramp
   if (!url || !/^https:\/\//i.test(url)) {
     return state.onrampLoading ? <ui.Loader unstyled={unstyled} /> : null;
   }
-  if (display === "tab") {
-    return (
-      <ui.SubmitLink part="onramp" href={url} className={className} style={style} unstyled={unstyled} data-display="tab">
-        {root.t("onramp.open")}
-      </ui.SubmitLink>
-    );
-  }
   return (
-    <iframe
-      title={title ?? root.t("onramp.title")}
-      allow="accelerometer; autoplay; camera; gyroscope; payment; clipboard-write"
-      referrerPolicy="no-referrer"
-      height={height}
+    <ui.SubmitLink
       {...rest}
       ref={ref}
-      src={url}
-      {...partProps("onramp", { className, style: { width: "100%", border: 0, ...style }, unstyled }, root.unstyled)}
-      data-display="embed"
-    />
+      part="onramp"
+      href={url}
+      className={className}
+      style={style}
+      unstyled={unstyled}
+      data-display="tab"
+    >
+      {root.t("onramp.open")}
+    </ui.SubmitLink>
   );
 });

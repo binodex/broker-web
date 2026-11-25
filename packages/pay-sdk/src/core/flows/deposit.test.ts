@@ -38,7 +38,7 @@ const setup = (extra: (request: FakeRequest) => FakeReply | undefined = () => un
       case "GET /broker/pay/deposits/dep_crypto_1":
         return json(200, cryptoDeposit());
       case "GET /broker/pay/onramp/session":
-        return json(200, { url: "https://buy.onramper.com/?sig=1", single_use: true });
+        return json(200, { url: "https://widget.coindisco.com/?sig=1", single_use: true });
       case "GET /broker/pay/deposits/quote":
         return json(200, {
           method_id: "fiat:ru:sbp",
@@ -237,7 +237,7 @@ describe("deposit flow", () => {
     void flow.actions.loadOnramp();
     await vi.advanceTimersByTimeAsync(0);
     expect(api.calls("/broker/pay/onramp/session")).toHaveLength(1);
-    expect(flow.getSnapshot().onrampUrl).toBe("https://buy.onramper.com/?sig=1");
+    expect(flow.getSnapshot().onrampUrl).toBe("https://widget.coindisco.com/?sig=1");
     flow.actions.destroy();
     client.destroy();
   });
@@ -248,7 +248,7 @@ describe("deposit flow", () => {
     const { api, flow, client } = setup((request) => {
       if (request.path !== "/broker/pay/onramp/session") return undefined;
       issued += 1;
-      const body = { url: `https://buy.onramper.com/?sig=${issued}`, single_use: true };
+      const body = { url: `https://widget.coindisco.com/?sig=${issued}`, single_use: true };
       if (issued === 2) return new Promise<Response>((resolve) => (hold = () => resolve(json(200, body))));
       return json(200, body);
     });
@@ -257,9 +257,9 @@ describe("deposit flow", () => {
     flow.actions.selectMethod("onramp:card");
     void flow.actions.loadOnramp();
     await vi.advanceTimersByTimeAsync(0);
-    expect(flow.getSnapshot().onrampUrl).toBe("https://buy.onramper.com/?sig=1");
+    expect(flow.getSnapshot().onrampUrl).toBe("https://widget.coindisco.com/?sig=1");
     flow.actions.selectMethod("onramp:card");
-    expect(flow.getSnapshot().onrampUrl).toBe("https://buy.onramper.com/?sig=1");
+    expect(flow.getSnapshot().onrampUrl).toBe("https://widget.coindisco.com/?sig=1");
     flow.actions.back();
     expect(flow.getSnapshot().onrampUrl).toBeNull();
     flow.actions.selectMethod("onramp:card");
@@ -274,7 +274,7 @@ describe("deposit flow", () => {
     void flow.actions.loadOnramp();
     await vi.advanceTimersByTimeAsync(0);
     expect(api.calls("/broker/pay/onramp/session")).toHaveLength(3);
-    expect(flow.getSnapshot().onrampUrl).toBe("https://buy.onramper.com/?sig=3");
+    expect(flow.getSnapshot().onrampUrl).toBe("https://widget.coindisco.com/?sig=3");
     flow.actions.destroy();
     client.destroy();
   });

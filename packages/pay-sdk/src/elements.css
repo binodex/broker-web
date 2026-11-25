@@ -45,12 +45,6 @@
     opacity: 0;
   }
 
-  .bp-onramp {
-    display: block;
-    border-radius: var(--bp-radius-sm);
-    background: var(--bp-color-surface);
-  }
-
   .bp-onramp-tab {
     display: flex;
     flex-direction: column;

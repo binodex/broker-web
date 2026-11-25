@@ -64,7 +64,7 @@ export const fr: Messages = {
   "qr.label": "Code QR du paiement",
   "onramp.title": "Acheter des cryptos",
   "onramp.open": "Ouvrir dans un nouvel onglet",
-  "onramp.disclosure": "Le paiement par carte est traité par Onramper et ses partenaires. Les fonds sont crédités après confirmation on-chain.",
+  "onramp.disclosure": "Le paiement par carte est traité par Coindisco et ses prestataires partenaires. Les fonds sont crédités sur votre solde de trading après confirmation sur la blockchain.",
   "address.label": "Adresse du portefeuille",
   "address.placeholder": "Collez l'adresse",
   "address.invalid.evm": "Adresse invalide : 0x suivi de 40 caractères hexadécimaux attendu",

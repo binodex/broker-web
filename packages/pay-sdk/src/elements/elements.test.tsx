@@ -1,4 +1,4 @@
-import { StrictMode, act, type ReactNode } from "react";
+import { StrictMode, act, createRef, type ReactNode } from "react";
 import { createRoot, type Root as ReactRoot } from "react-dom/client";
 import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
@@ -111,7 +111,7 @@ const depositApi = (extra: (request: FakeRequest) => FakeReply | undefined = () 
       case "GET /broker/pay/activity":
         return json(200, { server_time: Date.now(), deposits: [], withdrawals: [] });
       case "GET /broker/pay/onramp/session":
-        return json(200, { url: "https://buy.onramper.com/?sig=1", single_use: true });
+        return json(200, { url: "https://widget.coindisco.com/?sig=1", single_use: true });
       case "POST /broker/pay/deposits/crypto":
         return json(201, cryptoDeposit());
       case "GET /broker/pay/deposits/dep_crypto_1":
@@ -192,8 +192,8 @@ describe("Pay.Root + DepositForm", () => {
     await settle(10);
     await pickOnramp();
     await settle(10);
-    const frame = host.querySelector<HTMLIFrameElement>('iframe[data-binodex-pay="onramp"]');
-    expect(frame?.getAttribute("src")).toBe("https://buy.onramper.com/?sig=1");
+    const link = host.querySelector<HTMLAnchorElement>('a[data-binodex-pay="onramp"]');
+    expect(link?.getAttribute("href")).toBe("https://widget.coindisco.com/?sig=1");
     expect(api.calls("/broker/pay/onramp/session")).toHaveLength(1);
   });
 
@@ -496,33 +496,64 @@ describe("card tab", () => {
     expect(selectedMethod()).toBe("fiat:ru:card");
   });
 
-  it("opens Onramper under the country select for a country without a rail, with a fresh URL each time", async () => {
+  it("opens the card on-ramp under the country select for a country without a rail, with a fresh URL each time", async () => {
     let issued = 0;
     const api = depositApi((request) =>
       request.path === "/broker/pay/onramp/session"
-        ? json(200, { url: `https://buy.onramper.com/?sig=${(issued += 1)}`, single_use: true })
+        ? json(200, { url: `https://widget.coindisco.com/?sig=${(issued += 1)}`, single_use: true })
         : undefined,
     );
     await mount(api);
     await openCardTab();
     await chooseCountry("US");
     await settle(10);
-    const frame = () => host.querySelector<HTMLIFrameElement>('iframe[data-binodex-pay="onramp"]');
-    expect(frame()?.getAttribute("src")).toBe("https://buy.onramper.com/?sig=1");
+    const link = () => host.querySelector<HTMLAnchorElement>('a[data-binodex-pay="onramp"]');
+    expect(link()?.getAttribute("href")).toBe("https://widget.coindisco.com/?sig=1");
     expect(host.querySelector('[data-binodex-pay="tab"][data-tab="card"]')?.getAttribute("aria-pressed")).toBe("true");
     expect(part("country-trigger")).not.toBeNull();
-    expect(part("onramp-note")?.textContent).toContain("Onramper");
+    expect(part("onramp-note")?.textContent).toContain("Coindisco");
     expect(part("back")).toBeNull();
     expect(methodOption('[data-kind="onramp"]')).toBeNull();
     await chooseCountry("RU");
-    expect(frame()).toBeNull();
+    expect(link()).toBeNull();
     expect(amountInput()).not.toBeNull();
     await chooseCountry("US");
     await settle(10);
-    expect(frame()?.getAttribute("src")).toBe("https://buy.onramper.com/?sig=2");
+    expect(link()?.getAttribute("href")).toBe("https://widget.coindisco.com/?sig=2");
     expect(api.calls("/broker/pay/onramp/session")).toHaveLength(2);
     await click(host.querySelector('[data-binodex-pay="tab"][data-tab="crypto"]'));
-    expect(frame()).toBeNull();
+    expect(link()).toBeNull();
+  });
+
+  it("never frames the on-ramp, even when asked to embed, and adds the note once its URL is known", async () => {
+    const url = "https://widget.coindisco.com/?publicKey=pk_test&walletAddress=Wallet1";
+    let answer: (reply: Response) => void = () => undefined;
+    const api = depositApi((request) =>
+      request.path === "/broker/pay/onramp/session"
+        ? new Promise<Response>((resolve) => {
+            answer = resolve;
+          })
+        : undefined,
+    );
+    const ref = createRef<HTMLAnchorElement>();
+    await mount(api, <Pay.DepositForm components={{ Onramp: () => <Pay.Onramp ref={ref} display="embed" height={600} /> }} />);
+    await openCardTab();
+    await chooseCountry("US");
+    await settle(10);
+    expect(part("onramp-note")).toBeNull();
+    answer(json(200, { url, single_use: true }));
+    await settle(10);
+    expect(host.querySelector("iframe")).toBeNull();
+    const link = host.querySelector<HTMLAnchorElement>('a[data-binodex-pay="onramp"]');
+    expect(link?.getAttribute("href")).toBe(url);
+    expect(link?.getAttribute("target")).toBe("_blank");
+    expect(link?.textContent).toBe("Open in a new tab");
+    expect(link?.hasAttribute("display")).toBe(false);
+    expect(link?.hasAttribute("height")).toBe(false);
+    expect(ref.current).toBe(link);
+    expect(part("onramp-note")?.textContent).toBe(
+      "Card payment is processed by Coindisco and its provider partners. Funds are credited to your trading balance after on-chain confirmation.",
+    );
   });
 
   it("stays on the crypto tab untouched and leaves a custom picker to the integrator", async () => {
