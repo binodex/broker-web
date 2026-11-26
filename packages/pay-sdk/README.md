@@ -263,10 +263,10 @@ Every component accepts `className`, `style` and `unstyled`, forwards its ref an
 | `Quote` | Fees, amount received, ETA, slippage. |
 | `CryptoAddress` | Address, copy button, QR code (rendered locally, no image host), network warning, high-fee warning. |
 | `Requisites` | Fiat payment details: raw rows with copy buttons, or the requisites frame (see Security). `data-delivery="raw" \| "frame"`. |
-| `RequisitesFrame`, `ReceiptUpload`, `Countdown`, `RedirectButton`, `Onramp` | Frame, receipt upload (RU deposits in raw mode; in frame mode the receipt is uploaded inside the frame), server-clock countdown, hosted page link, onramp link (opens Coindisco in a new tab: Coindisco frames only on the origins listed in its dashboard, so `display` and `height` are ignored). |
+| `RequisitesFrame`, `ReceiptUpload`, `Countdown`, `RedirectButton`, `Onramp` | Frame, receipt upload (RU deposits in raw mode; in frame mode the receipt is uploaded inside the frame), server-clock countdown, hosted page link, card onramp (Coindisco). The onramp is a link that opens it in a new tab; with `display="embed"` it is a frame (`height`, 640 px by default) with that link under it. Coindisco frames only on the origins listed in its dashboard: ask Binodex to list your site (`https://host`, each subdomain separately) before you turn the frame on. On a site that is not listed the frame stays blank and the link under it still works. `ref`, `className` and `style` go to the link. |
 | `SlippageWarning`, `SubmitButton`, `Status`, `BackButton`, `Qr` | |
 | `RestartButton`, `MethodNotice` | Cancel / new payment for card deposits (and a new withdrawal after a final status); the receipt notice under the amount for rails that may need a receipt. |
-| `DepositForm`, `WithdrawForm` | Full screens composed from the parts above, laid out like the binodex payment modal: a card with the title, the balance and a close button, the Crypto / Card tabs, the payment country and the bank tiles. Replace any piece: `<Pay.DepositForm components={{ MethodPicker: MyPicker }} />`. |
+| `DepositForm`, `WithdrawForm` | Full screens composed from the parts above, laid out like the binodex payment modal: a card with the title, the balance and a close button, the Crypto / Card tabs, the payment country and the bank tiles. Replace any piece: `<Pay.DepositForm components={{ MethodPicker: MyPicker }} />`. `<Pay.DepositForm onrampDisplay="embed" />` frames the card onramp (see `Onramp`). |
 
 ### Hooks
 
@@ -314,7 +314,7 @@ font-src https://binodex.app https://binodex.pro;
 img-src 'self' data: https:;
 ```
 
-Replace the hosts with the ones in your session responses (`api_bases`, `widget_origins`) and in `allowedApiOrigins` / `allowedWidgetOrigins`. `img-src` covers the bank logos, coin icons and flags from the Binodex domains, your logo from the partner cabinet and providers that send a QR image instead of a QR payload; crypto QR codes are drawn locally as SVG. With `assetBaseUrl` / `fontBaseUrl` on your own host, list that host instead.
+Replace the hosts with the ones in your session responses (`api_bases`, `widget_origins`) and in `allowedApiOrigins` / `allowedWidgetOrigins`. `img-src` covers the bank logos, coin icons and flags from the Binodex domains, your logo from the partner cabinet and providers that send a QR image instead of a QR payload; crypto QR codes are drawn locally as SVG. With `assetBaseUrl` / `fontBaseUrl` on your own host, list that host instead. With the card onramp framed (`display="embed"`), add `https://widget.coindisco.com` to `frame-src`.
 
 ## Migration from the iframe widget
 

@@ -322,6 +322,26 @@ export const LinkButton = forwardRef<HTMLButtonElement, Omit<ButtonProps, "varia
   );
 });
 
+/** `LinkButton` as a link: the secondary action that opens `href` in a new tab. */
+export const LinkAnchor = forwardRef<HTMLAnchorElement, Omit<AnchorProps, "variant">>(function LinkAnchor(
+  { part = "link-anchor", className, style, unstyled, children, ...rest },
+  ref,
+) {
+  const { off } = useClasses(unstyled);
+  return (
+    <a
+      target="_blank"
+      rel="noopener noreferrer"
+      referrerPolicy="no-referrer"
+      {...rest}
+      ref={ref}
+      {...viewProps(part, "link-button", { className, style, unstyled }, off)}
+    >
+      {children}
+    </a>
+  );
+});
+
 export type ErrorBoxVariant = "deposit" | "rail" | "withdraw";
 
 export const ErrorBox = forwardRef<HTMLDivElement, DivProps & { variant?: ErrorBoxVariant; part?: string; children?: ReactNode }>(

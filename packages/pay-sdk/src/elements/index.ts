@@ -31,7 +31,7 @@ export {
   RequisitesFrame,
   RestartButton,
 } from "./components/deposit.js";
-export type { OnrampProps, RequisitesFrameProps, RequisitesProps } from "./components/deposit.js";
+export type { OnrampDisplay, OnrampProps, RequisitesFrameProps, RequisitesProps } from "./components/deposit.js";
 export { Quote, SlippageWarning, Status } from "./components/status.js";
 export type { StatusProps } from "./components/status.js";
 export { Qr } from "./components/Qr.js";

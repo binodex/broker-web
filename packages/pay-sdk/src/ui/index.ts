@@ -28,6 +28,7 @@ export {
   AmountField,
   ErrorBox,
   Hint,
+  LinkAnchor,
   LinkButton,
   Loader,
   RetryButton,

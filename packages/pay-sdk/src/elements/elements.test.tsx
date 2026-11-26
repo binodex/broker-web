@@ -525,7 +525,7 @@ describe("card tab", () => {
     expect(link()).toBeNull();
   });
 
-  it("never frames the on-ramp, even when asked to embed, and adds the note once its URL is known", async () => {
+  it("opens the on-ramp in a new tab by default and adds the note once its URL is known", async () => {
     const url = "https://widget.coindisco.com/?publicKey=pk_test&walletAddress=Wallet1";
     let answer: (reply: Response) => void = () => undefined;
     const api = depositApi((request) =>
@@ -535,8 +535,7 @@ describe("card tab", () => {
           })
         : undefined,
     );
-    const ref = createRef<HTMLAnchorElement>();
-    await mount(api, <Pay.DepositForm components={{ Onramp: () => <Pay.Onramp ref={ref} display="embed" height={600} /> }} />);
+    await mount(api);
     await openCardTab();
     await chooseCountry("US");
     await settle(10);
@@ -547,13 +546,106 @@ describe("card tab", () => {
     const link = host.querySelector<HTMLAnchorElement>('a[data-binodex-pay="onramp"]');
     expect(link?.getAttribute("href")).toBe(url);
     expect(link?.getAttribute("target")).toBe("_blank");
+    expect(link?.getAttribute("data-display")).toBe("tab");
+    expect(link?.classList.contains("bp-submit")).toBe(true);
     expect(link?.textContent).toBe("Open in a new tab");
-    expect(link?.hasAttribute("display")).toBe(false);
-    expect(link?.hasAttribute("height")).toBe(false);
-    expect(ref.current).toBe(link);
     expect(part("onramp-note")?.textContent).toBe(
       "Card payment is processed by Coindisco and its provider partners. Funds are credited to your trading balance after on-chain confirmation.",
     );
+  });
+
+  it("frames the on-ramp with onrampDisplay=embed and keeps the new-tab link under the frame", async () => {
+    const url = "https://widget.coindisco.com/?publicKey=pk_test&walletAddress=Wallet1";
+    const api = depositApi((request) =>
+      request.path === "/broker/pay/onramp/session" ? json(200, { url, single_use: true }) : undefined,
+    );
+    await mount(api, <Pay.DepositForm onrampDisplay="embed" />);
+    await openCardTab();
+    await chooseCountry("US");
+    await settle(10);
+    const frame = host.querySelector<HTMLIFrameElement>('iframe[data-binodex-pay="onramp-frame"]');
+    expect(frame?.getAttribute("src")).toBe(url);
+    expect(frame?.getAttribute("title")).toBe("Buy crypto");
+    expect(frame?.getAttribute("height")).toBe("640");
+    expect(frame?.getAttribute("allow")).toBe("payment; clipboard-write; camera; microphone");
+    expect(frame?.getAttribute("class")).toBe("bp-onramp-frame");
+    expect(frame?.style.width).toBe("100%");
+    const link = host.querySelector<HTMLAnchorElement>('a[data-binodex-pay="onramp"]');
+    expect(link?.getAttribute("href")).toBe(url);
+    expect(link?.getAttribute("target")).toBe("_blank");
+    expect(link?.getAttribute("rel")).toBe("noopener noreferrer");
+    expect(link?.getAttribute("data-display")).toBe("embed");
+    expect(link?.classList.contains("bp-link-button")).toBe(true);
+    expect(link?.classList.contains("bp-submit")).toBe(false);
+    expect(link?.textContent).toBe("Open in a new tab");
+    const note = part("onramp-note");
+    expect(note?.textContent).toContain("Coindisco");
+    expect(frame && link && frame.compareDocumentPosition(link) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(link && note && link.compareDocumentPosition(note) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(api.calls("/broker/pay/onramp/session")).toHaveLength(1);
+  });
+
+  it("lets <Pay.Onramp display=embed> set the frame height and keeps ref, className and style on the link", async () => {
+    const url = "https://widget.coindisco.com/?publicKey=pk_test&walletAddress=Wallet1";
+    const api = depositApi((request) =>
+      request.path === "/broker/pay/onramp/session" ? json(200, { url, single_use: true }) : undefined,
+    );
+    const ref = createRef<HTMLAnchorElement>();
+    await mount(
+      api,
+      <Pay.DepositForm
+        components={{
+          Onramp: () => <Pay.Onramp ref={ref} display="embed" height={600} className="mine" style={{ marginTop: 4 }} />,
+        }}
+      />,
+    );
+    await openCardTab();
+    await chooseCountry("US");
+    await settle(10);
+    const frame = host.querySelector<HTMLIFrameElement>('iframe[data-binodex-pay="onramp-frame"]');
+    const link = host.querySelector<HTMLAnchorElement>('a[data-binodex-pay="onramp"]');
+    expect(frame?.getAttribute("height")).toBe("600");
+    expect(frame?.classList.contains("mine")).toBe(false);
+    expect(ref.current).toBe(link);
+    expect(link?.classList.contains("mine")).toBe(true);
+    expect(link?.style.marginTop).toBe("4px");
+  });
+
+  it("hands the form's onrampDisplay to a replaced Onramp", async () => {
+    const api = depositApi((request) =>
+      request.path === "/broker/pay/onramp/session"
+        ? json(200, { url: "https://widget.coindisco.com/?sig=1", single_use: true })
+        : undefined,
+    );
+    await mount(
+      api,
+      <Pay.DepositForm onrampDisplay="embed" components={{ Onramp: ({ display }) => <span data-got={display} /> }} />,
+    );
+    await openCardTab();
+    await chooseCountry("US");
+    await settle(10);
+    expect(host.querySelector("[data-got]")?.getAttribute("data-got")).toBe("embed");
+  });
+
+  it("frames the on-ramp unstyled: no bp- classes, and the frame still fills the width without a border", async () => {
+    const url = "https://widget.coindisco.com/?publicKey=pk_test&walletAddress=Wallet1";
+    const api = depositApi((request) =>
+      request.path === "/broker/pay/onramp/session" ? json(200, { url, single_use: true }) : undefined,
+    );
+    await render(
+      <Pay.Root mode="deposit" createSession={sessionSpy()} fetch={api.fetch} locale="en" unstyled>
+        <Pay.DepositForm onrampDisplay="embed" />
+      </Pay.Root>,
+    );
+    await openCardTab();
+    await chooseCountry("US");
+    await settle(10);
+    const frame = host.querySelector<HTMLIFrameElement>('iframe[data-binodex-pay="onramp-frame"]');
+    expect(frame?.getAttribute("src")).toBe(url);
+    expect(frame?.style.width).toBe("100%");
+    expect(frame?.getAttribute("style")).toMatch(/border:\s*0/);
+    expect(part("onramp")?.getAttribute("href")).toBe(url);
+    expect(host.querySelector('[class*="bp-"]')).toBeNull();
   });
 
   it("stays on the crypto tab untouched and leaves a custom picker to the integrator", async () => {

@@ -53,6 +53,12 @@
     animation: bp-content-enter 0.22s ease 0.06s both;
   }
 
+  .bp-onramp-frame {
+    display: block;
+    border-radius: var(--bp-radius-sm);
+    background: var(--bp-color-surface);
+  }
+
   .bp-onramp-note {
     margin: 0;
     font-size: 11px;

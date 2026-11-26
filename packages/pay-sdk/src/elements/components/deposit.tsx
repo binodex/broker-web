@@ -476,21 +476,28 @@ export const MethodNotice = forwardRef<HTMLDivElement, DivProps>(function Method
   );
 });
 
+export type OnrampDisplay = "tab" | "embed";
+
 /**
- * The card on-ramp is Coindisco, which lets itself be framed only on the origins
- * listed in its dashboard, never on a broker's site: the session URL always
- * opens in a new tab.
+ * The card on-ramp is Coindisco. `display="tab"` (the default) is a link that
+ * opens it in a new tab, which works on any site. `display="embed"` frames it on
+ * your page; Coindisco lets itself be framed only on the origins listed in its
+ * dashboard, so ask Binodex to list your site first. The new-tab link stays
+ * under the frame: on a site that is not listed the frame is blank, and the link
+ * is the way through. `ref`, `className` and `style` are always that link's.
  */
 export type OnrampProps = Omit<AnchorHTMLAttributes<HTMLAnchorElement>, "className" | "style" | "href"> &
   PartStyleProps & {
-    /** @deprecated Ignored: the on-ramp always opens in a new tab. */
-    display?: "embed" | "tab";
-    /** @deprecated Ignored: the on-ramp always opens in a new tab. */
+    display?: OnrampDisplay;
+    /** Frame height in pixels with `display="embed"`. */
     height?: number;
   };
 
+/** Allows the frame what the widget's checkout and identity check use. */
+const ONRAMP_FRAME_ALLOW = "payment; clipboard-write; camera; microphone";
+
 export const Onramp = forwardRef<HTMLAnchorElement, OnrampProps>(function Onramp(
-  { display: _display, height: _height, className, style, unstyled, ...rest },
+  { display = "tab", height = 640, className, style, unstyled, ...rest },
   ref,
 ) {
   const { root, actions, state } = useDeposit("<Pay.Onramp>");
@@ -518,18 +525,43 @@ export const Onramp = forwardRef<HTMLAnchorElement, OnrampProps>(function Onramp
   if (!url || !/^https:\/\//i.test(url)) {
     return state.onrampLoading ? <ui.Loader unstyled={unstyled} /> : null;
   }
+  if (display !== "embed") {
+    return (
+      <ui.SubmitLink
+        {...rest}
+        ref={ref}
+        part="onramp"
+        href={url}
+        className={className}
+        style={style}
+        unstyled={unstyled}
+        data-display="tab"
+      >
+        {root.t("onramp.open")}
+      </ui.SubmitLink>
+    );
+  }
   return (
-    <ui.SubmitLink
-      {...rest}
-      ref={ref}
-      part="onramp"
-      href={url}
-      className={className}
-      style={style}
-      unstyled={unstyled}
-      data-display="tab"
-    >
-      {root.t("onramp.open")}
-    </ui.SubmitLink>
+    <>
+      <iframe
+        title={root.t("onramp.title")}
+        src={url}
+        height={height}
+        allow={ONRAMP_FRAME_ALLOW}
+        {...partProps("onramp-frame", { style: { width: "100%", border: 0 }, unstyled }, root.unstyled)}
+      />
+      <ui.LinkAnchor
+        {...rest}
+        ref={ref}
+        part="onramp"
+        href={url}
+        className={className}
+        style={style}
+        unstyled={unstyled}
+        data-display="embed"
+      >
+        {root.t("onramp.open")}
+      </ui.LinkAnchor>
+    </>
   );
 });

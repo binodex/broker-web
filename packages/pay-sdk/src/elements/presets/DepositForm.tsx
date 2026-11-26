@@ -24,6 +24,7 @@ import {
   RedirectButton,
   Requisites,
   RestartButton,
+  type OnrampDisplay,
 } from "../components/deposit.js";
 import { AmountInput, PhoneInput } from "../components/inputs.js";
 import { CurrencyPicker, MethodPicker, NetworkPicker } from "../components/pickers.js";
@@ -49,7 +50,8 @@ export interface DepositFormComponents {
   ReceiptUpload: ComponentType;
   RedirectButton: ComponentType;
   RestartButton: ComponentType;
-  Onramp: ComponentType;
+  /** Gets the form's `onrampDisplay`. */
+  Onramp: ComponentType<{ display?: OnrampDisplay }>;
   Status: ComponentType;
 }
 
@@ -80,6 +82,8 @@ const DEFAULTS: DepositFormComponents = {
 export type DepositFormProps = Omit<HTMLAttributes<HTMLDivElement>, "className" | "style" | "children"> &
   PartStyleProps & {
     components?: Partial<DepositFormComponents>;
+    /** How the card on-ramp opens: `"tab"` (default) or `"embed"`, see `<Pay.Onramp display>`. */
+    onrampDisplay?: OnrampDisplay;
   };
 
 type Screen = "loading" | "error" | "entry" | "crypto" | "paying" | "credited";
@@ -99,7 +103,7 @@ const screenOf = (state: DepositFlowState | null, cryptoOpen: boolean): Screen =
 };
 
 export const DepositForm = forwardRef<HTMLDivElement, DepositFormProps>(function DepositForm(
-  { components, className, style, unstyled, ...rest },
+  { components, onrampDisplay, className, style, unstyled, ...rest },
   ref,
 ) {
   const { root, state } = useDepositFlowStore("<Pay.DepositForm>");
@@ -148,7 +152,7 @@ export const DepositForm = forwardRef<HTMLDivElement, DepositFormProps>(function
             </div>
           ) : onrampSelected ? (
             <div className={isUnstyled ? undefined : "bp-onramp-tab"}>
-              <c.Onramp />
+              <c.Onramp display={onrampDisplay} />
               {/* With the session URL only: the note never sits under a loader or an error. */}
               {state?.onrampUrl ? (
                 <p className={isUnstyled ? undefined : "bp-onramp-note"} data-binodex-pay="onramp-note">

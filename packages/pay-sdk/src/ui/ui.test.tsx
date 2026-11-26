@@ -86,6 +86,7 @@ const VIEWS: Record<string, ReactElement> = {
   SubmitButton: <ui.SubmitButton>Go</ui.SubmitButton>,
   SubmitLink: <ui.SubmitLink href="https://pay.example/x">Open</ui.SubmitLink>,
   LinkButton: <ui.LinkButton>Cancel</ui.LinkButton>,
+  LinkAnchor: <ui.LinkAnchor href="https://pay.example/x">Open in a new tab</ui.LinkAnchor>,
   RetryButton: <ui.RetryButton />,
   Hint: <ui.Hint>Sign in to make a deposit.</ui.Hint>,
   BrandLogo: <ui.BrandLogo src="/img/trade/logo.svg" />,
